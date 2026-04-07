@@ -16,12 +16,16 @@ find_package(json-c REQUIRED)
 
 add_executable(MyApp src/main.c)
 add_executable(WebSocketTest src/websocket_test.c)
+add_executable(JsonTest src/json_test.c)
 
 target_compile_definitions(MyApp PRIVATE CURL_STATICLIB)
 target_compile_definitions(WebSocketTest PRIVATE CURL_STATICLIB)
+target_compile_definitions(JsonTest PRIVATE)
 
 target_link_libraries(MyApp PRIVATE CURL::libcurl ZLIB::ZLIB json-c::json-c)
 target_link_libraries(WebSocketTest PRIVATE CURL::libcurl ZLIB::ZLIB json-c::json-c)
+target_link_libraries(JsonTest PRIVATE json-c::json-c)
 
 target_compile_options(MyApp PRIVATE /MT)
 target_compile_options(WebSocketTest PRIVATE /MT)
+target_compile_options(JsonTest PRIVATE /MT)
