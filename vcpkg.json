@@ -9,6 +9,7 @@
       "name": "curl",
       "features": ["websockets"]
     },
-    "zlib"
+    "zlib",
+    "json-c"
   ]
 }
