@@ -33,4 +33,6 @@ add_executable(PrintDriver WIN32 ${SOURCES} ${HEADERS} src/resource.rc)
 
 target_compile_definitions(PrintDriver PRIVATE CURL_STATICLIB)
 
+target_compile_options(PrintDriver PRIVATE /MT)
+
 target_link_libraries(PrintDriver PRIVATE CURL::libcurl ZLIB::ZLIB json-c::json-c)
