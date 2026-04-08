@@ -6,3 +6,4 @@ vcpkg_installed/
 *.obj
 cookie.txt
 temp.ps1
+downloads

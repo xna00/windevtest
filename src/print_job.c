@@ -262,12 +262,27 @@ int get_waiting_print_jobs(HttpClient *client, PrintTaskInfo **tasks, int *count
 }
 
 /*
+ * 清理文件名，移除或替换不合法的字符
+ */
+static void sanitize_filename(char *filename) {
+    /* 替换文件系统不允许的字符 */
+    const char *invalid = "\\/:*?\"<>|";
+    char *p = filename;
+    while (*p) {
+        if (strchr(invalid, *p)) {
+            *p = '_';
+        }
+        p++;
+    }
+}
+
+/*
  * 下载文件到本地
  * 根据fileId从服务器下载文件内容，保存到本地
  * 使用GET请求，参数格式: /api/files/getFile?data=["fileId"]
  * @param client HTTP客户端
  * @param file_id 文件ID（用于API请求）
- * @param filename 文件名（用于保存到本地）
+ * @param filename 文件名（用于保存到本地，UTF-8编码）
  * @param local_path 输出：本地文件路径
  * @param path_size 路径缓冲区大小
  * @return 0成功，-1失败
@@ -279,39 +294,62 @@ int download_file_to_local(HttpClient *client, const char *file_id, const char *
         return -1;
     }
     
-    /* 构建本地文件路径，使用原始文件名 */
-    snprintf(local_path, path_size, DOWNLOAD_FOLDER "/%s", filename);
+    /* 复制并清理文件名 */
+    char safe_filename[512];
+    strncpy(safe_filename, filename, sizeof(safe_filename) - 1);
+    safe_filename[sizeof(safe_filename) - 1] = '\0';
+    sanitize_filename(safe_filename);
+
+    /* 构建本地文件路径 */
+    snprintf(local_path, path_size, DOWNLOAD_FOLDER "/%s", safe_filename);
     
     /* 构建文件下载URL */
     char url[512];
     snprintf(url, sizeof(url), "%s?data=[\"%s\"]", API_GET_FILE, file_id);
     
+    printf("Downloading from: %s\n", url);
+    
     char *response = NULL;
     long status_code = 0;
+    size_t data_size = 0;
     
-    /* 下载文件 */
+    /* 下载文件（二进制数据） */
     const char *cookie = http_client_get_cookie(client);
-    int ret = http_get_with_cookie(client, url, cookie, &response, &status_code);
+    int ret = http_get_binary(client, url, cookie, &response, &data_size, &status_code);
     
     if (ret != 0 || status_code != 200 || !response) {
         printf("Failed to download file %s (status: %ld)\n", file_id, status_code);
+        if (response) free(response);
         return -1;
     }
     
-    /* 写入本地文件 */
-    FILE *fp = fopen(local_path, "wb");
+    /* 检查响应是否包含错误信息（可能是JSON格式的错误） */
+    if (data_size > 0 && (response[0] == '{' || response[0] == '[')) {
+        /* 看起来是JSON响应，不是文件内容 */
+        printf("Server returned JSON instead of file: %.100s...\n", response);
+        free(response);
+        return -1;
+    }
+    
+    /* 将UTF-8路径转换为UTF-16 */
+    wchar_t wide_path[MAX_PATH];
+    MultiByteToWideChar(CP_UTF8, 0, local_path, -1, wide_path, MAX_PATH);
+    
+    /* 使用_wfopen打开文件（支持UTF-16路径） */
+    FILE *fp = _wfopen(wide_path, L"wb");
     if (!fp) {
         printf("Failed to create local file: %s\n", local_path);
         free(response);
         return -1;
     }
     
-    size_t written = fwrite(response, 1, strlen(response), fp);
+    /* 使用实际的data_size，不依赖\0终止符 */
+    size_t written = fwrite(response, 1, data_size, fp);
     fclose(fp);
     free(response);
     
-    if (written == 0) {
-        printf("Failed to write file\n");
+    if (written == 0 || written != data_size) {
+        printf("Failed to write file completely (wrote %zu of %zu bytes)\n", written, data_size);
         return -1;
     }
     

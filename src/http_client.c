@@ -254,6 +254,43 @@ int http_get_with_cookie(HttpClient *client, const char *url, const char *cookie
     return 0;
 }
 
+/*
+ * 发送GET请求，带指定Cookie，返回二进制数据
+ * 响应大小保存在size中，不依赖\0终止符
+ */
+int http_get_binary(HttpClient *client, const char *url, const char *cookie, char **response, size_t *size, long *status_code) {
+    if (!client || !client->curl) return -1;
+    
+    struct MemoryBuffer chunk;
+    chunk.data = malloc(1);
+    chunk.size = 0;
+    
+    curl_easy_reset(client->curl);
+    curl_easy_setopt(client->curl, CURLOPT_URL, url);
+    curl_easy_setopt(client->curl, CURLOPT_WRITEFUNCTION, write_callback);
+    curl_easy_setopt(client->curl, CURLOPT_WRITEDATA, &chunk);
+    curl_easy_setopt(client->curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(client->curl, CURLOPT_TIMEOUT, 30L);
+    
+    /* 设置Cookie */
+    if (cookie) {
+        curl_easy_setopt(client->curl, CURLOPT_COOKIE, cookie);
+    }
+    
+    CURLcode res = curl_easy_perform(client->curl);
+    
+    if (res != CURLE_OK) {
+        free(chunk.data);
+        return -1;
+    }
+    
+    curl_easy_getinfo(client->curl, CURLINFO_RESPONSE_CODE, status_code);
+    *response = chunk.data;
+    *size = chunk.size;  /* 返回实际大小 */
+    
+    return 0;
+}
+
 /* ==================== Cookie管理函数 ==================== */
 /*
  * 获取当前保存的Cookie

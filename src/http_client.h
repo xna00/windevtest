@@ -66,6 +66,18 @@ int http_post_with_client_cookie(HttpClient *client, const char *url, const char
  */
 int http_get_with_cookie(HttpClient *client, const char *url, const char *cookie, char **response, long *status_code);
 
+/*
+ * 发送GET请求，带指定Cookie，返回二进制数据
+ * @param client HTTP客户端
+ * @param url 请求URL
+ * @param cookie 认证Cookie
+ * @param response 输出：响应内容
+ * @param size 输出：响应大小（二进制数据可能包含\0）
+ * @param status_code HTTP状态码
+ * @return 0成功，-1失败
+ */
+int http_get_binary(HttpClient *client, const char *url, const char *cookie, char **response, size_t *size, long *status_code);
+
 /* ==================== Cookie管理函数 ==================== */
 /* 获取当前保存的Cookie */
 char* http_client_get_cookie(HttpClient *client);
