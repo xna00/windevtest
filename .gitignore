@@ -4,3 +4,5 @@ vcpkg_installed/
 *.pdb
 *.ilk
 *.obj
+cookie.txt
+temp.ps1
