@@ -40,14 +40,14 @@ int print_file_to_default_printer(const char *file_path) {
     
     /* 获取系统默认打印机名称 */
     if (!GetDefaultPrinterW(printer_name, &buf_size)) {
-        printf("Failed to get default printer\n");
+        add_log(L"获取默认打印机失败");
         return -1;
     }
     
     /* 打开打印机 */
     HANDLE hPrinter;
     if (!OpenPrinterW(printer_name, &hPrinter, NULL)) {
-        printf("Failed to open printer\n");
+        add_log(L"打开打印机失败");
         return -1;
     }
     
@@ -61,23 +61,27 @@ int print_file_to_default_printer(const char *file_path) {
     /* 开始打印文档 */
     DWORD job_id = StartDocPrinterW(hPrinter, 1, (LPBYTE)&doc_info);
     if (job_id == 0) {
-        printf("Failed to start document\n");
+        add_log(L"开始打印文档失败");
         ClosePrinter(hPrinter);
         return -1;
     }
     
     /* 开始一页 */
     if (!StartPagePrinter(hPrinter)) {
-        printf("Failed to start page\n");
+        add_log(L"开始打印页失败");
         EndDocPrinter(hPrinter);
         ClosePrinter(hPrinter);
         return -1;
     }
     
+    /* 将UTF-8路径转换为宽字符串 */
+    wchar_t wide_file_path[MAX_PATH];
+    MultiByteToWideChar(CP_UTF8, 0, file_path, -1, wide_file_path, MAX_PATH);
+    
     /* 读取文件内容并打印 */
-    FILE *fp = fopen(file_path, "rb");
+    FILE *fp = _wfopen(wide_file_path, L"rb");
     if (!fp) {
-        printf("Failed to open file: %s\n", file_path);
+        add_log(L"打开文件失败");
         EndPagePrinter(hPrinter);
         EndDocPrinter(hPrinter);
         ClosePrinter(hPrinter);
@@ -92,7 +96,7 @@ int print_file_to_default_printer(const char *file_path) {
     /* 分配缓冲区 */
     char *buffer = (char *)malloc(file_size);
     if (!buffer) {
-        printf("Failed to allocate memory\n");
+        add_log(L"内存分配失败");
         fclose(fp);
         EndPagePrinter(hPrinter);
         EndDocPrinter(hPrinter);
@@ -105,7 +109,7 @@ int print_file_to_default_printer(const char *file_path) {
     fclose(fp);
     
     if (read_size != (size_t)file_size) {
-        printf("Failed to read file completely\n");
+        add_log(L"读取文件不完整");
         free(buffer);
         EndPagePrinter(hPrinter);
         EndDocPrinter(hPrinter);
@@ -116,7 +120,7 @@ int print_file_to_default_printer(const char *file_path) {
     /* 发送打印数据 */
     DWORD written;
     if (!WritePrinter(hPrinter, (LPVOID)buffer, (DWORD)file_size, &written)) {
-        printf("Failed to write to printer\n");
+        add_log(L"写入打印机失败");
         free(buffer);
         EndPagePrinter(hPrinter);
         EndDocPrinter(hPrinter);
@@ -131,7 +135,9 @@ int print_file_to_default_printer(const char *file_path) {
     EndDocPrinter(hPrinter);
     ClosePrinter(hPrinter);
     
-    printf("Print job submitted successfully (%ld bytes)\n", file_size);
+    wchar_t log[128];
+    swprintf(log, 128, L"打印任务已提交 (%ld 字节)", file_size);
+    add_log(log);
     return 0;
 }
 
@@ -159,14 +165,14 @@ int get_waiting_print_jobs(HttpClient *client, const char *computer_id, PrintTas
     int ret = http_post_with_client_cookie(client, API_LIST_PRINTJOBS, json_body, &response, &status_code);
     
     if (ret != 0 || status_code != 200 || !response) {
-        printf("Failed to get waiting print jobs\n");
+        add_log(L"获取待打印任务失败");
         return -1;
     }
     
     /* 解析JSON响应 */
     json_object *root = parse_json_response(response);
     if (!root) {
-        printf("Failed to parse JSON response\n");
+        add_log(L"解析JSON响应失败");
         free(response);
         return -1;
     }
@@ -181,7 +187,7 @@ int get_waiting_print_jobs(HttpClient *client, const char *computer_id, PrintTas
     } else {
         /* 响应是对象，尝试获取printJobs字段 */
         if (!json_object_object_get_ex(root, "printJobs", &jobs_array)) {
-            printf("No printJobs in response\n");
+            add_log(L"响应中没有printJobs字段");
             json_object_put(root);
             free(response);
             *count = 0;
@@ -191,7 +197,7 @@ int get_waiting_print_jobs(HttpClient *client, const char *computer_id, PrintTas
     
     int array_len = json_object_array_length(jobs_array);
     if (array_len == 0) {
-        printf("No print jobs found\n");
+        add_log(L"没有找到打印任务");
         json_object_put(root);
         free(response);
         *count = 0;
@@ -230,7 +236,12 @@ int get_waiting_print_jobs(HttpClient *client, const char *computer_id, PrintTas
             
             int task_count = json_object_array_length(print_tasks_obj);
             
-            printf("Job %s has %d task(s)\n", job_id, task_count);
+            wchar_t wide_job_id[256];
+            MultiByteToWideChar(CP_UTF8, 0, job_id, -1, wide_job_id, 256);
+            
+            wchar_t log[256];
+            swprintf(log, 256, L"任务 %s 有 %d 个打印任务", wide_job_id, task_count);
+            add_log(log);
             
             /* 遍历printTasks数组 */
             for (int j = 0; j < task_count; j++) {
@@ -258,8 +269,6 @@ int get_waiting_print_jobs(HttpClient *client, const char *computer_id, PrintTas
                     } else {
                         strncpy((*tasks)[*count].filename, json_object_get_string(file_id_obj), sizeof((*tasks)[*count].filename) - 1);
                     }
-                    
-                    printf("  Task: id=%s, fileId=%s, filename=%s\n", (*tasks)[*count].task_id, (*tasks)[*count].file_id, (*tasks)[*count].filename);
                     
                     (*count)++;
                 }
@@ -301,7 +310,7 @@ static void sanitize_filename(char *filename) {
 int download_file_to_local(HttpClient *client, const char *file_id, const char *filename, char *local_path, size_t path_size) {
     /* 确保下载目录存在 */
     if (ensure_download_folder() != 0) {
-        printf("Failed to create download folder\n");
+        add_log(L"创建下载目录失败");
         return -1;
     }
     
@@ -322,8 +331,6 @@ int download_file_to_local(HttpClient *client, const char *file_id, const char *
     char url[512];
     snprintf(url, sizeof(url), "%s?data=[\"%s\"]", API_GET_PS_FILE, file_id);
     
-    printf("Downloading from: %s\n", url);
-    
     char *response = NULL;
     long status_code = 0;
     size_t data_size = 0;
@@ -333,7 +340,12 @@ int download_file_to_local(HttpClient *client, const char *file_id, const char *
     int ret = http_get_binary(client, url, cookie, &response, &data_size, &status_code);
     
     if (ret != 0 || status_code != 200 || !response) {
-        printf("Failed to download file %s (status: %ld)\n", file_id, status_code);
+        wchar_t wide_file_id[256];
+        MultiByteToWideChar(CP_UTF8, 0, file_id, -1, wide_file_id, 256);
+        
+        wchar_t log[512];
+        swprintf(log, 512, L"下载文件失败 %s (状态码: %ld)", wide_file_id, status_code);
+        add_log(log);
         if (response) free(response);
         return -1;
     }
@@ -341,7 +353,7 @@ int download_file_to_local(HttpClient *client, const char *file_id, const char *
     /* 检查响应是否包含错误信息（可能是JSON格式的错误） */
     if (data_size > 0 && (response[0] == '{' || response[0] == '[')) {
         /* 看起来是JSON响应，不是文件内容 */
-        printf("Server returned JSON instead of file: %.100s...\n", response);
+        add_log(L"服务器返回JSON而非文件内容");
         free(response);
         return -1;
     }
@@ -353,7 +365,7 @@ int download_file_to_local(HttpClient *client, const char *file_id, const char *
     /* 使用_wfopen打开文件（支持UTF-16路径） */
     FILE *fp = _wfopen(wide_path, L"wb");
     if (!fp) {
-        printf("Failed to create local file: %s\n", local_path);
+        add_log(L"创建本地文件失败");
         free(response);
         return -1;
     }
@@ -364,11 +376,19 @@ int download_file_to_local(HttpClient *client, const char *file_id, const char *
     free(response);
     
     if (written == 0 || written != data_size) {
-        printf("Failed to write file completely (wrote %zu of %zu bytes)\n", written, data_size);
+        wchar_t log[128];
+        swprintf(log, 128, L"文件写入不完整 (已写入 %zu/%zu 字节)", written, data_size);
+        add_log(log);
         return -1;
     }
     
-    printf("File downloaded: %s (%zu bytes)\n", local_path, written);
+    /* 将UTF-8路径转换为宽字符串 */
+    wchar_t wide_path2[256];
+    MultiByteToWideChar(CP_UTF8, 0, local_path, -1, wide_path2, 256);
+    
+    wchar_t log[512];
+    swprintf(log, 512, L"文件已下载: %s (%zu 字节)", wide_path2, written);
+    add_log(log);
     return 0;
 }
 
@@ -405,9 +425,19 @@ int report_task_succeeded(HttpClient *client, const char *task_id) {
     int ret = http_post_with_client_cookie(client, API_TASK_SUCCEED, json_body, &response, &status_code);
     
     if (ret == 0 && status_code == 200) {
-        printf("Task %s reported as succeeded\n", task_id);
+        wchar_t wide_task_id[256];
+        MultiByteToWideChar(CP_UTF8, 0, task_id, -1, wide_task_id, 256);
+        
+        wchar_t log[256];
+        swprintf(log, 256, L"任务 %s 已上报成功", wide_task_id);
+        add_log(log);
     } else {
-        printf("Failed to report task success (status: %ld)\n", status_code);
+        wchar_t wide_task_id[256];
+        MultiByteToWideChar(CP_UTF8, 0, task_id, -1, wide_task_id, 256);
+        
+        wchar_t log[256];
+        swprintf(log, 256, L"上报任务状态失败 %s (状态码: %ld)", wide_task_id, status_code);
+        add_log(log);
     }
     
     if (response) free(response);
