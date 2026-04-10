@@ -18,6 +18,8 @@ set(SOURCES
     src/websocket.c
     src/login_dlg.c
     src/print_job.c
+    src/device_id.c
+    src/ui.c
 )
 
 set(HEADERS
@@ -26,6 +28,8 @@ set(HEADERS
     src/websocket.h
     src/login_dlg.h
     src/print_job.h
+    src/device_id.h
+    src/ui.h
     src/resource.h
 )
 
@@ -33,6 +37,6 @@ add_executable(PrintDriver WIN32 ${SOURCES} ${HEADERS} src/resource.rc)
 
 target_compile_definitions(PrintDriver PRIVATE CURL_STATICLIB)
 
-target_compile_options(PrintDriver PRIVATE /MT)
+target_compile_options(PrintDriver PRIVATE /MT /utf-8)
 
-target_link_libraries(PrintDriver PRIVATE CURL::libcurl ZLIB::ZLIB json-c::json-c)
+target_link_libraries(PrintDriver PRIVATE CURL::libcurl ZLIB::ZLIB json-c::json-c comctl32.lib)

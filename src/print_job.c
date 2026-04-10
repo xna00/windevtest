@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 打印任务实现
  * 
  * 功能说明:
@@ -9,6 +9,7 @@
 #include "print_job.h"
 #include "http_client.h"
 #include "config.h"
+#include "ui.h"
 #include <json-c/json.h>
 #include <winspool.h>
 #include <stdio.h>
@@ -139,13 +140,23 @@ int print_file_to_default_printer(const char *file_path) {
  * 从服务器API获取待打印任务
  * 使用POST请求，body为"[]"
  */
-int get_waiting_print_jobs(HttpClient *client, PrintTaskInfo **tasks, int *count) {
+int get_waiting_print_jobs(HttpClient *client, const char *computer_id, PrintTaskInfo **tasks, int *count) {
     char *response = NULL;
     long status_code = 0;
     
-    /* 发送带Cookie的POST请求，body为"[]" */
-    const char *cookie = http_client_get_cookie(client);
-    int ret = http_post_with_client_cookie(client, API_WAITING_PRINTJOBS, "[]", &response, &status_code);
+    /* 构建过滤参数JSON */
+    char json_body[512];
+    if (computer_id && computer_id[0] != '\0') {
+        snprintf(json_body, sizeof(json_body), 
+            "[{\"state\": \"waiting_print\", \"computerId\": \"%s\"}]", 
+            computer_id);
+    } else {
+        snprintf(json_body, sizeof(json_body), 
+            "[{\"state\": \"waiting_print\"}]");
+    }
+    
+    /* 发送带Cookie的POST请求 */
+    int ret = http_post_with_client_cookie(client, API_LIST_PRINTJOBS, json_body, &response, &status_code);
     
     if (ret != 0 || status_code != 200 || !response) {
         printf("Failed to get waiting print jobs\n");
@@ -294,18 +305,22 @@ int download_file_to_local(HttpClient *client, const char *file_id, const char *
         return -1;
     }
     
-    /* 复制并清理文件名 */
+    /* 构建本地文件路径（使用.ps后缀） */
     char safe_filename[512];
     strncpy(safe_filename, filename, sizeof(safe_filename) - 1);
     safe_filename[sizeof(safe_filename) - 1] = '\0';
     sanitize_filename(safe_filename);
-
-    /* 构建本地文件路径 */
-    snprintf(local_path, path_size, DOWNLOAD_FOLDER "/%s", safe_filename);
     
-    /* 构建文件下载URL */
+    /* 移除原始后缀，添加.ps后缀 */
+    char *dot = strrchr(safe_filename, '.');
+    if (dot) {
+        *dot = '\0';
+    }
+    snprintf(local_path, path_size, DOWNLOAD_FOLDER "/%s.ps", safe_filename);
+    
+    /* 构建文件下载URL（使用PS文件API） */
     char url[512];
-    snprintf(url, sizeof(url), "%s?data=[\"%s\"]", API_GET_FILE, file_id);
+    snprintf(url, sizeof(url), "%s?data=[\"%s\"]", API_GET_PS_FILE, file_id);
     
     printf("Downloading from: %s\n", url);
     
@@ -398,4 +413,298 @@ int report_task_succeeded(HttpClient *client, const char *task_id) {
     if (response) free(response);
     
     return ret;
+}
+
+/*
+ * 枚举本地打印机
+ * 使用 EnumPrinters API 获取所有本地打印机
+ */
+int enum_local_printers(PrinterList *list) {
+    DWORD buffer_size = 0;
+    DWORD count = 0;
+    DWORD needed = 0;
+    
+    /* 第一次调用：获取所需缓冲区大小 */
+    EnumPrintersW(
+        PRINTER_ENUM_LOCAL | PRINTER_ENUM_CONNECTIONS,
+        NULL,
+        2,
+        NULL,
+        0,
+        &needed,
+        &count
+    );
+    
+    if (needed == 0) {
+        list->printers = NULL;
+        list->count = 0;
+        return 0;
+    }
+    
+    /* 分配缓冲区 */
+    LPBYTE buffer = malloc(needed);
+    if (!buffer) return -1;
+    
+    /* 第二次调用：获取打印机列表 */
+    if (!EnumPrintersW(
+        PRINTER_ENUM_LOCAL | PRINTER_ENUM_CONNECTIONS,
+        NULL,
+        2,
+        buffer,
+        needed,
+        &needed,
+        &count
+    )) {
+        free(buffer);
+        return -1;
+    }
+    
+    /* 分配打印机数组 */
+    list->printers = malloc(sizeof(LocalPrinterInfo) * count);
+    if (!list->printers) {
+        free(buffer);
+        return -1;
+    }
+    
+    /* 解析打印机信息 */
+    PRINTER_INFO_2W *info = (PRINTER_INFO_2W *)buffer;
+    list->count = 0;
+    
+    for (DWORD i = 0; i < count; i++) {
+        /* 只处理本地打印机和网络打印机 */
+        if (info[i].pPrinterName && info[i].pPrinterName[0] != L'\0') {
+            /* 保存宽字符版本 */
+            wcscpy(list->printers[list->count].wname, info[i].pPrinterName);
+            
+            /* 转换为UTF-8 */
+            WideCharToMultiByte(CP_UTF8, 0, info[i].pPrinterName, -1,
+                list->printers[list->count].name, 256, NULL, NULL);
+            
+            if (info[i].pPortName) {
+                WideCharToMultiByte(CP_UTF8, 0, info[i].pPortName, -1,
+                    list->printers[list->count].port, 256, NULL, NULL);
+            } else {
+                list->printers[list->count].port[0] = '\0';
+            }
+            
+            if (info[i].pDriverName) {
+                WideCharToMultiByte(CP_UTF8, 0, info[i].pDriverName, -1,
+                    list->printers[list->count].driver, 256, NULL, NULL);
+            } else {
+                list->printers[list->count].driver[0] = '\0';
+            }
+            
+            list->printers[list->count].enabled = 0;
+            list->count++;
+        }
+    }
+    
+    free(buffer);
+    return 0;
+}
+
+/*
+ * 释放打印机列表内存
+ */
+void free_printer_list(PrinterList *list) {
+    if (list->printers) {
+        free(list->printers);
+        list->printers = NULL;
+    }
+    list->count = 0;
+}
+
+/*
+ * 获取计算机信息
+ * @return 0成功，-1失败，-2计算机不存在
+ */
+int get_computer_info(HttpClient *client, const char *computer_id, ComputerInfo *info) {
+    char json_body[512];
+    snprintf(json_body, sizeof(json_body), "[\"%s\"]", computer_id);
+    
+    char *response = NULL;
+    long status_code = 0;
+    
+    int ret = http_post_with_client_cookie(client, API_COMPUTER_INFO, json_body, &response, &status_code);
+    
+    if (ret != 0) {
+        add_log(L"HTTP请求失败");
+        return -1;
+    }
+    
+    wchar_t status_log[128];
+    swprintf(status_log, 128, L"API返回状态码: %ld", status_code);
+    add_log(status_log);
+    
+    if (response) {
+        add_log(L"收到响应");
+    } else {
+        add_log(L"无响应");
+    }
+    
+    if (status_code == 404) {
+        add_log(L"计算机未找到 (404)");
+        free(response);
+        return -2;
+    }
+    
+    if (status_code == 400) {
+        if (response) {
+            json_object *root = parse_json_response(response);
+            if (root) {
+                json_object *error_obj;
+                if (json_object_object_get_ex(root, "errorCode", &error_obj)) {
+                    const char *error_code = json_object_get_string(error_obj);
+                    if (error_code && strcmp(error_code, "ENTITY_NOT_FOUND") == 0) {
+                        add_log(L"计算机未找到 (ENTITY_NOT_FOUND)");
+                        json_object_put(root);
+                        free(response);
+                        return -2;
+                    }
+                }
+                json_object_put(root);
+            }
+            free(response);
+        }
+        return -1;
+    }
+    
+    if (status_code != 200 || !response) {
+        add_log(L"意外的状态码或无响应");
+        free(response);
+        return -1;
+    }
+    
+    /* 解析JSON响应 */
+    json_object *root = parse_json_response(response);
+    if (!root) {
+        free(response);
+        return -1;
+    }
+    
+    /* 初始化 */
+    memset(info, 0, sizeof(ComputerInfo));
+    strncpy(info->id, computer_id, sizeof(info->id) - 1);
+    
+    /* 获取name字段 */
+    json_object *name_obj;
+    if (json_object_object_get_ex(root, "name", &name_obj)) {
+        const char *name = json_object_get_string(name_obj);
+        if (name) {
+            strncpy(info->name, name, sizeof(info->name) - 1);
+        }
+    }
+    
+    /* 获取printers数组 */
+    json_object *printers_array;
+    if (json_object_object_get_ex(root, "printers", &printers_array)) {
+        info->printer_count = json_object_array_length(printers_array);
+        if (info->printer_count > 0) {
+            info->printers = malloc(sizeof(char*) * info->printer_count);
+            for (int i = 0; i < info->printer_count; i++) {
+                json_object *printer = json_object_array_get_idx(printers_array, i);
+                json_object *name_obj;
+                if (json_object_object_get_ex(printer, "name", &name_obj)) {
+                    const char *pname = json_object_get_string(name_obj);
+                    info->printers[i] = malloc(256);
+                    if (pname) {
+                        strncpy(info->printers[i], pname, 255);
+                    } else {
+                        info->printers[i][0] = '\0';
+                    }
+                } else {
+                    info->printers[i] = malloc(256);
+                    info->printers[i][0] = '\0';
+                }
+            }
+        }
+    }
+    
+    json_object_put(root);
+    free(response);
+    return 0;
+}
+
+/*
+ * 释放计算机信息内存
+ */
+void free_computer_info(ComputerInfo *info) {
+    if (info->printers) {
+        for (int i = 0; i < info->printer_count; i++) {
+            if (info->printers[i]) {
+                free(info->printers[i]);
+            }
+        }
+        free(info->printers);
+        info->printers = NULL;
+    }
+    info->printer_count = 0;
+}
+
+/*
+ * 设置计算机名称
+ */
+int set_computer_name(HttpClient *client, const char *computer_id, const char *new_name) {
+    char json_body[512];
+    snprintf(json_body, sizeof(json_body), "[\"%s\", \"%s\"]", computer_id, new_name);
+    
+    char *response = NULL;
+    long status_code = 0;
+    
+    int ret = http_post_with_client_cookie(client, API_SET_COMPUTER_NAME, json_body, &response, &status_code);
+    
+    if (response) free(response);
+    
+    return (ret == 0 && status_code == 200) ? 0 : -1;
+}
+
+/*
+ * 添加计算机
+ */
+int add_computer(HttpClient *client, const char *computer_id, const char *computer_name) {
+    char json_body[512];
+    snprintf(json_body, sizeof(json_body), "[\"%s\", \"%s\"]", computer_id, computer_name);
+    
+    char *response = NULL;
+    long status_code = 0;
+    
+    int ret = http_post_with_client_cookie(client, API_ADD_COMPUTER, json_body, &response, &status_code);
+    
+    if (response) free(response);
+    
+    return (ret == 0 && status_code == 200) ? 0 : -1;
+}
+
+/*
+ * 添加打印机到计算机
+ */
+int add_computer_printer(HttpClient *client, const char *computer_id, const char *printer_name) {
+    char json_body[512];
+    snprintf(json_body, sizeof(json_body), "[\"%s\", \"%s\"]", computer_id, printer_name);
+    
+    char *response = NULL;
+    long status_code = 0;
+    
+    int ret = http_post_with_client_cookie(client, API_ADD_PRINTER, json_body, &response, &status_code);
+    
+    if (response) free(response);
+    
+    return (ret == 0 && status_code == 200) ? 0 : -1;
+}
+
+/*
+ * 从计算机删除打印机
+ */
+int remove_computer_printer(HttpClient *client, const char *computer_id, const char *printer_name) {
+    char json_body[512];
+    snprintf(json_body, sizeof(json_body), "[\"%s\", \"%s\"]", computer_id, printer_name);
+    
+    char *response = NULL;
+    long status_code = 0;
+    
+    int ret = http_post_with_client_cookie(client, API_REMOVE_PRINTER, json_body, &response, &status_code);
+    
+    if (response) free(response);
+    
+    return (ret == 0 && status_code == 200) ? 0 : -1;
 }

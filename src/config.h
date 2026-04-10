@@ -30,22 +30,60 @@
 #define API_LOGIN API_BASE_URL "/api/auth/login"
 
 /*
- * 获取等待中的打印任务列表
- * 使用POST请求，body为"[]"
+ * 获取打印任务列表（支持过滤）
+ * 使用POST请求，body格式: [{"state": "waiting_print", "computerId": "xxx", "printerName": "xxx"}]
+ * 参数都是可选的
  */
-#define API_WAITING_PRINTJOBS API_BASE_URL "/api/printJob/waitingPrintJobs"
+#define API_LIST_PRINTJOBS API_BASE_URL "/api/printJob/listPrintJobsWithTasks"
 
 /*
- * 下载打印文件
+ * 下载打印文件（普通文件）
  * 使用GET请求，参数格式: /api/files/getFile?data=["fileId"]
  */
 #define API_GET_FILE API_BASE_URL "/api/files/getFile"
+
+/*
+ * 下载PS打印文件
+ * 使用GET请求，参数格式: /api/files/getPsFile?data=["fileId"]
+ */
+#define API_GET_PS_FILE API_BASE_URL "/api/files/getPsFile"
 
 /*
  * 报告打印任务成功
  * 使用POST请求，body格式: [taskId]
  */
 #define API_TASK_SUCCEED API_BASE_URL "/api/printJob/taskSucced"
+
+/* ==================== 计算机接口 ==================== */
+/*
+ * 获取计算机信息
+ * 使用POST请求，body格式: [computerId]
+ */
+#define API_COMPUTER_INFO API_BASE_URL "/api/computer/computerInfo"
+
+/*
+ * 设置计算机名称
+ * 使用POST请求，body格式: [computerId, newName]
+ */
+#define API_SET_COMPUTER_NAME API_BASE_URL "/api/computer/setComputerName"
+
+/*
+ * 添加计算机
+ * 使用POST请求，body格式: [computerId, computerName]
+ */
+#define API_ADD_COMPUTER API_BASE_URL "/api/computer/addComputer"
+
+/*
+ * 添加打印机到计算机
+ * 使用POST请求，body格式: [computerId, printerName]
+ */
+#define API_ADD_PRINTER API_BASE_URL "/api/computer/addComputerPrinter"
+
+/*
+ * 从计算机删除打印机
+ * 使用POST请求，body格式: [computerId, printerName]
+ */
+#define API_REMOVE_PRINTER API_BASE_URL "/api/computer/removeComputerPrinter"
 
 /*
  * WebSocket服务器地址

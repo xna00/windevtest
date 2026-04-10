@@ -1,4 +1,4 @@
-/*
+﻿/*
  * HTTP客户端实现
  * 
  * 使用libcurl进行HTTP通信
