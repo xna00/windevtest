@@ -1,4 +1,4 @@
-﻿﻿/*
+﻿/*
  * PrintDriver - 主程序入口
  * 
  * 功能说明:
@@ -26,7 +26,6 @@
 /* ==================== 头文件 ==================== */
 #include <windows.h>
 #include <process.h>
-#include <wingdi.h>
 #include <winuser.h>
 #include <shellapi.h>
 #include <commctrl.h>
@@ -103,10 +102,31 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     wc.lpfnWndProc = WndProc;                    /* 窗口消息处理函数 */
     wc.hInstance = hInstance;
     wc.lpszClassName = L"PrintDriverWindow";
+    /* LoadCursor - 加载预定义的光标
+     * 参数1: 模块句柄，NULL表示使用系统预定义光标
+     * 参数2: 光标资源ID，IDC_ARROW表示箭头光标
+     * 返回值: 光标句柄
+     */
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+    /* RegisterClassW - 注册窗口类
+     * 参数: 窗口类结构指针
+     * 返回值: 如果成功，返回窗口类的原子值；如果失败，返回0
+     */
     RegisterClassW(&wc);
     
-    /* 2. 创建主窗口 */
+    /* 2. 创建主窗口
+     * CreateWindowW - 创建窗口
+     * 参数1: 窗口类名
+     * 参数2: 窗口标题
+     * 参数3: 窗口样式，WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN 表示重叠窗口并减少子窗口重绘闪烁
+     * 参数4-5: 窗口位置，CW_USEDEFAULT表示使用默认位置
+     * 参数6-7: 窗口宽度和高度
+     * 参数8: 父窗口句柄，NULL表示没有父窗口
+     * 参数9: 菜单句柄，NULL表示使用窗口类默认菜单
+     * 参数10: 应用实例句柄
+     * 参数11: 窗口创建数据，NULL表示没有额外数据
+     * 返回值: 窗口句柄，如果失败返回NULL
+     */
     g_hwnd = CreateWindowW(
         L"PrintDriverWindow",
         L"Print Driver",
@@ -130,11 +150,26 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     g_nid.uID = 1;
     g_nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     g_nid.uCallbackMessage = WM_TRAYICON;
+    /* LoadIcon - 加载图标
+     * 参数1: 模块句柄，NULL表示使用系统预定义图标
+     * 参数2: 图标资源ID，IDI_APPLICATION表示默认应用程序图标
+     * 返回值: 图标句柄
+     */
     g_nid.hIcon = LoadIcon(NULL, IDI_APPLICATION);
     wcscpy(g_nid.szTip, L"Print Driver");
+    /* Shell_NotifyIconW - 向系统托盘发送通知
+     * 参数1: 操作类型，NIM_ADD表示添加图标
+     * 参数2: 通知图标数据结构指针
+     * 返回值: 如果成功，返回非零值；如果失败，返回零
+     */
     Shell_NotifyIconW(NIM_ADD, &g_nid);
     
-    /* 显示窗口 */
+    /* 显示窗口
+     * ShowWindow - 显示或隐藏窗口
+     * 参数1: 窗口句柄
+     * 参数2: 显示状态，SW_SHOW表示正常显示窗口
+     * 返回值: 如果窗口之前可见，返回非零值；如果之前隐藏，返回零
+     */
     ShowWindow(g_hwnd, SW_SHOW);
     
     /* 5. 在后台线程检查用户登录状态 */
@@ -142,8 +177,22 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     
     /* 6. 消息循环 */
     MSG msg;
+    /* GetMessage - 从消息队列获取消息
+     * 参数1: 消息结构指针
+     * 参数2: 窗口句柄，NULL表示获取所有窗口的消息
+     * 参数3-4: 消息范围，0表示获取所有消息
+     * 返回值: 如果成功获取消息，返回非零值；如果获取到WM_QUIT消息，返回零；如果失败，返回-1
+     */
     while (GetMessage(&msg, NULL, 0, 0)) {
+        /* TranslateMessage - 翻译消息
+         * 参数: 消息结构指针
+         * 返回值: 如果消息被翻译，返回非零值；否则返回零
+         */
         TranslateMessage(&msg);
+        /* DispatchMessageW - 分发消息到窗口过程
+         * 参数: 消息结构指针
+         * 返回值: 窗口过程的返回值
+         */
         DispatchMessageW(&msg);
     }
     
@@ -236,12 +285,42 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             if (lParam == WM_RBUTTONDOWN) {
                 /* 右键点击：显示菜单 */
                 POINT pt;
+                /* GetCursorPos - 获取光标位置
+                 * 参数: 指向POINT结构的指针，用于接收光标坐标
+                 * 返回值: 如果成功，返回非零值；如果失败，返回零
+                 */
                 GetCursorPos(&pt);
+                /* CreatePopupMenu - 创建弹出菜单
+                 * 返回值: 菜单句柄，如果失败返回NULL
+                 */
                 HMENU hMenu = CreatePopupMenu();
+                /* AppendMenuW - 向菜单添加菜单项
+                 * 参数1: 菜单句柄
+                 * 参数2: 菜单项标志，MF_STRING表示字符串菜单项
+                 * 参数3: 菜单项ID
+                 * 参数4: 菜单项文本
+                 * 返回值: 如果成功，返回非零值；如果失败，返回零
+                 */
                 AppendMenuW(hMenu, MF_STRING, ID_TRAY_SHOW, L"Show");
                 AppendMenuW(hMenu, MF_STRING, ID_TRAY_EXIT, L"Exit");
+                /* SetForegroundWindow - 将窗口设置为前台窗口
+                 * 参数: 窗口句柄
+                 * 返回值: 如果成功，返回非零值；如果失败，返回零
+                 */
                 SetForegroundWindow(hwnd);
+                /* TrackPopupMenu - 显示弹出菜单并跟踪用户选择
+                 * 参数1: 菜单句柄
+                 * 参数2: 显示标志，TPM_LEFTALIGN | TPM_RIGHTBUTTON 表示左对齐并右键触发
+                 * 参数3-4: 菜单显示位置的x和y坐标
+                 * 参数5: 拥有菜单的窗口句柄
+                 * 参数6: 菜单位置矩形，NULL表示使用默认位置
+                 * 返回值: 选中的菜单项ID，如果没有选中返回0
+                 */
                 TrackPopupMenu(hMenu, TPM_LEFTALIGN | TPM_RIGHTBUTTON, pt.x, pt.y, 0, hwnd, NULL);
+                /* DestroyMenu - 销毁菜单
+                 * 参数: 菜单句柄
+                 * 返回值: 如果成功，返回非零值；如果失败，返回零
+                 */
                 DestroyMenu(hMenu);
             }
             else if (lParam == WM_LBUTTONDOWN) {
@@ -433,19 +512,39 @@ void register_computer(void) {
         /* 计算机不存在，需要注册 */
         add_log(L"计算机未找到，正在注册...");
         
-        /* 获取计算机名称 */
-        char computer_name[256] = {0};
-        DWORD size = sizeof(computer_name);
-        if (!GetComputerNameA(computer_name, &size)) {
-            strcpy(computer_name, "Unknown");
+        /* 获取计算机名称
+         * GetComputerNameW - 获取本地计算机的名称
+         * 参数1: 指向接收计算机名称的宽字符缓冲区的指针
+         * 参数2: 指向变量的指针，该变量指定缓冲区的大小（以字符为单位）
+         * 返回值: 如果函数成功，返回非零值；如果失败，返回零
+         */
+        wchar_t computer_name[256] = {0};
+        DWORD size = sizeof(computer_name) / sizeof(wchar_t);
+        if (!GetComputerNameW(computer_name, &size)) {
+            wcscpy(computer_name, L"Unknown");
         }
         
         wchar_t name_log[256];
-        swprintf(name_log, 256, L"计算机名称: %S", computer_name);
+        swprintf(name_log, 256, L"计算机名称: %s", computer_name);
         add_log(name_log);
         
+        /* 将宽字符转换为多字节字符串
+         * WideCharToMultiByte - 将宽字符字符串转换为多字节字符串
+         * 参数1: 代码页，CP_UTF8表示使用UTF-8编码
+         * 参数2: 转换标志，0表示默认行为
+         * 参数3: 要转换的宽字符字符串
+         * 参数4: 宽字符字符串的长度，-1表示自动计算
+         * 参数5: 接收多字节字符串的缓冲区
+         * 参数6: 缓冲区大小
+         * 参数7: 替代字符，NULL表示使用默认值
+         * 参数8: 指向变量的指针，指示是否使用了替代字符，NULL表示不需要
+         * 返回值: 如果函数成功，返回写入缓冲区的字节数；如果失败，返回零
+         */
+        char computer_name_utf8[256] = {0};
+        WideCharToMultiByte(CP_UTF8, 0, computer_name, -1, computer_name_utf8, 256, NULL, NULL);
+        
         /* 添加计算机 */
-        if (add_computer(g_http_client, g_computer_id, computer_name) == 0) {
+        if (add_computer(g_http_client, g_computer_id, computer_name_utf8) == 0) {
             add_log(L"计算机注册成功");
             
             /* 获取默认打印机并添加 */

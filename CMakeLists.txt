@@ -18,6 +18,10 @@ set(SOURCES
     src/websocket.c
     src/login_dlg.c
     src/print_job.c
+    src/print_core.c
+    src/printer_manager.c
+    src/computer_manager.c
+    src/file_downloader.c
     src/device_id.c
     src/ui.c
 )
@@ -28,6 +32,10 @@ set(HEADERS
     src/websocket.h
     src/login_dlg.h
     src/print_job.h
+    src/print_core.h
+    src/printer_manager.h
+    src/computer_manager.h
+    src/file_downloader.h
     src/device_id.h
     src/ui.h
     src/resource.h
