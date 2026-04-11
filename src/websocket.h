@@ -15,6 +15,8 @@
 /* ==================== 配置常量 ==================== */
 #define WS_RECONNECT_DELAY 5000      /* 重连延迟（毫秒） */
 #define WS_MAX_RECONNECT_ATTEMPTS 10 /* 最大重连尝试次数 */
+#define WS_PING_INTERVAL 30000       /* 心跳间隔（毫秒） */
+#define WS_PING_TIMEOUT 31000        /* 心跳超时（毫秒） */
 
 /* ==================== 类型定义 ==================== */
 /*
@@ -34,6 +36,8 @@ typedef struct {
     int connected;                      /* 连接状态 */
     int reconnect_attempts;             /* 当前重连尝试次数 */
     int should_reconnect;               /* 是否应该重连 */
+    DWORD last_ping_time;               /* 上次发送ping的时间 */
+    DWORD last_pong_time;               /* 上次收到pong的时间 */
 } WebSocketClient;
 
 /* ==================== 函数声明 ==================== */
@@ -95,5 +99,22 @@ int ws_is_connected(WebSocketClient *ws);
  * 重置重连计数器
  */
 void ws_reset_reconnect_attempts(WebSocketClient *ws);
+
+/*
+ * 发送ping消息
+ * @return 0成功，-1失败
+ */
+int ws_send_ping(WebSocketClient *ws);
+
+/*
+ * 检查心跳超时
+ * @return 1超时，0正常
+ */
+int ws_check_ping_timeout(WebSocketClient *ws);
+
+/*
+ * 更新心跳时间
+ */
+void ws_update_heartbeat(WebSocketClient *ws);
 
 #endif

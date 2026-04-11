@@ -584,6 +584,7 @@ void register_computer(void) {
  * - 使用libcurl的WebSocket支持
  * - 收到消息后调用on_websocket_message处理
  * - 支持掉线自动重连
+ * - 支持心跳检测
  * 
  * 注意: 这是一个阻塞循环，会一直等待消息
  *       如果要支持UI响应，需要移到单独线程
@@ -621,15 +622,36 @@ void connect_websocket(void) {
         if (ws_connect(g_ws_client, API_WEBSOCKET_URL) == 0) {
             add_log(L"WebSocket已连接");
             ws_reset_reconnect_attempts(g_ws_client);
+            ws_update_heartbeat(g_ws_client);
             
             /* 进入消息接收循环 */
             char buffer[4096];
+            DWORD last_ping_check = GetTickCount();
+            
             while (ws_is_connected(g_ws_client)) {
+                /* 检查是否需要发送ping */
+                DWORD current_time = GetTickCount();
+                if (current_time - last_ping_check >= WS_PING_INTERVAL) {
+                    if (ws_send_ping(g_ws_client) == 0) {
+                        add_log(L"发送心跳ping");
+                    }
+                    last_ping_check = current_time;
+                }
+                
+                /* 检查心跳超时 */
+                if (ws_check_ping_timeout(g_ws_client)) {
+                    add_log(L"心跳超时，连接已断开");
+                    ws_disconnect(g_ws_client);
+                    break;
+                }
+                
+                /* 接收消息 */
                 size_t recv_bytes = 0;
                 int ret = ws_receive(g_ws_client, buffer, sizeof(buffer), &recv_bytes);
                 
                 if (ret == 0 && recv_bytes > 0) {
                     buffer[recv_bytes] = '\0';
+                    ws_update_heartbeat(g_ws_client);
                     on_websocket_message(buffer);
                 } else if (ret != 0) {
                     /* 接收失败，连接已断开 */

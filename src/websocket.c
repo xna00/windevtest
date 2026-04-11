@@ -45,6 +45,8 @@ WebSocketClient* ws_init(const char *cookie, const char *computer_id) {
     ws->connected = 0;
     ws->reconnect_attempts = 0;
     ws->should_reconnect = 1;
+    ws->last_ping_time = 0;
+    ws->last_pong_time = 0;
     
     return ws;
 }
@@ -188,5 +190,61 @@ int ws_is_connected(WebSocketClient *ws) {
 void ws_reset_reconnect_attempts(WebSocketClient *ws) {
     if (ws) {
         ws->reconnect_attempts = 0;
+    }
+}
+
+/*
+ * 发送ping消息
+ * 使用curl_ws_send发送ping帧
+ * GetTickCount - 获取系统启动后经过的毫秒数
+ * 返回值: 如果成功，返回毫秒数；如果失败，返回0
+ */
+int ws_send_ping(WebSocketClient *ws) {
+    if (!ws || !ws->connected) return -1;
+    
+    size_t sent = 0;
+    CURLcode res = curl_ws_send(ws->curl, "", 0, &sent, 0, CURLWS_PING);
+    
+    if (res == CURLE_OK) {
+        ws->last_ping_time = GetTickCount();
+        return 0;
+    }
+    
+    return -1;
+}
+
+/*
+ * 检查心跳超时
+ * 如果超过WS_PING_TIMEOUT没有收到pong响应，认为连接已断开
+ * GetTickCount - 获取系统启动后经过的毫秒数
+ * 返回值: 如果成功，返回毫秒数；如果失败，返回0
+ */
+int ws_check_ping_timeout(WebSocketClient *ws) {
+    if (!ws) return 1;
+    
+    DWORD current_time = GetTickCount();
+    
+    /* 如果从未发送过ping，不检查超时 */
+    if (ws->last_ping_time == 0) {
+        return 0;
+    }
+    
+    /* 检查是否超时 */
+    if (current_time - ws->last_ping_time > WS_PING_TIMEOUT) {
+        return 1;
+    }
+    
+    return 0;
+}
+
+/*
+ * 更新心跳时间
+ * 收到消息时调用，更新last_pong_time
+ * GetTickCount - 获取系统启动后经过的毫秒数
+ * 返回值: 如果成功，返回毫秒数；如果失败，返回0
+ */
+void ws_update_heartbeat(WebSocketClient *ws) {
+    if (ws) {
+        ws->last_pong_time = GetTickCount();
     }
 }
