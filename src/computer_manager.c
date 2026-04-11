@@ -87,14 +87,14 @@ int get_computer_info(HttpClient *client, const char *computer_id, ComputerInfo 
     
     /* 初始化 */
     memset(info, 0, sizeof(ComputerInfo));
-    strncpy(info->id, computer_id, sizeof(info->id) - 1);
+    strncpy_s(info->id, sizeof(info->id), computer_id, _TRUNCATE);
     
     /* 获取name字段 */
     json_object *name_obj;
     if (json_object_object_get_ex(root, "name", &name_obj)) {
         const char *name = json_object_get_string(name_obj);
         if (name) {
-            strncpy(info->name, name, sizeof(info->name) - 1);
+            strncpy_s(info->name, sizeof(info->name), name, _TRUNCATE);
         }
     }
     
@@ -111,7 +111,7 @@ int get_computer_info(HttpClient *client, const char *computer_id, ComputerInfo 
                     const char *pname = json_object_get_string(name_obj);
                     info->printers[i] = malloc(256);
                     if (pname) {
-                        strncpy(info->printers[i], pname, 255);
+                        strncpy_s(info->printers[i], 256, pname, _TRUNCATE);
                     } else {
                         info->printers[i][0] = '\0';
                     }

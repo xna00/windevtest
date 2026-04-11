@@ -64,8 +64,7 @@ int download_file_to_local(HttpClient *client, const char *file_id, const char *
     
     /* 构建本地文件路径（使用.ps后缀） */
     char safe_filename[512];
-    strncpy(safe_filename, filename, sizeof(safe_filename) - 1);
-    safe_filename[sizeof(safe_filename) - 1] = '\0';
+    strncpy_s(safe_filename, sizeof(safe_filename), filename, _TRUNCATE);
     sanitize_filename(safe_filename);
     
     /* 移除原始后缀，添加.ps后缀 */

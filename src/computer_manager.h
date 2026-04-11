@@ -1,7 +1,7 @@
 #ifndef COMPUTER_MANAGER_H
 #define COMPUTER_MANAGER_H
 
-struct HttpClient;
+#include "http_client.h"
 
 typedef struct _ComputerInfo {
     char id[256];
@@ -10,11 +10,11 @@ typedef struct _ComputerInfo {
     int printer_count;
 } ComputerInfo;
 
-int get_computer_info(struct HttpClient *client, const char *computer_id, ComputerInfo *info);
+int get_computer_info(HttpClient *client, const char *computer_id, ComputerInfo *info);
 void free_computer_info(ComputerInfo *info);
-int set_computer_name(struct HttpClient *client, const char *computer_id, const char *new_name);
-int add_computer(struct HttpClient *client, const char *computer_id, const char *computer_name);
-int add_computer_printer(struct HttpClient *client, const char *computer_id, const char *printer_name);
-int remove_computer_printer(struct HttpClient *client, const char *computer_id, const char *printer_name);
+int set_computer_name(HttpClient *client, const char *computer_id, const char *new_name);
+int add_computer(HttpClient *client, const char *computer_id, const char *computer_name);
+int add_computer_printer(HttpClient *client, const char *computer_id, const char *printer_name);
+int remove_computer_printer(HttpClient *client, const char *computer_id, const char *printer_name);
 
 #endif

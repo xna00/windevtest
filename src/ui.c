@@ -151,14 +151,14 @@ void refresh_printer_list(void) {
             wchar_t wname[256];
             MultiByteToWideChar(CP_UTF8, 0, g_computer_info.name, -1, wname, 256);
             SetWindowTextW(g_printer_name_edit, wname);
-            strncpy(g_computer_name, g_computer_info.name, sizeof(g_computer_name) - 1);
+            strncpy_s(g_computer_name, sizeof(g_computer_name), g_computer_info.name, _TRUNCATE);
         } else {
             char computer_name[256] = {0};
             get_computer_name(computer_name, sizeof(computer_name));
             wchar_t wname[256];
             MultiByteToWideChar(CP_UTF8, 0, computer_name, -1, wname, 256);
             SetWindowTextW(g_printer_name_edit, wname);
-            strncpy(g_computer_name, computer_name, sizeof(g_computer_name) - 1);
+            strncpy_s(g_computer_name, sizeof(g_computer_name), computer_name, _TRUNCATE);
         }
         
         for (int i = 0; i < g_local_printers.count; i++) {
@@ -205,7 +205,7 @@ void refresh_printer_list(void) {
                 wchar_t wname[256];
                 MultiByteToWideChar(CP_UTF8, 0, g_computer_info.name, -1, wname, 256);
                 SetWindowTextW(g_printer_name_edit, wname);
-                strncpy(g_computer_name, g_computer_info.name, sizeof(g_computer_name) - 1);
+                strncpy_s(g_computer_name, sizeof(g_computer_name), g_computer_info.name, _TRUNCATE);
             }
             
             for (int i = 0; i < g_local_printers.count; i++) {
@@ -260,7 +260,7 @@ void refresh_printer_list(void) {
         wchar_t wname[256];
         MultiByteToWideChar(CP_UTF8, 0, computer_name, -1, wname, 256);
         SetWindowTextW(g_printer_name_edit, wname);
-        strncpy(g_computer_name, computer_name, sizeof(g_computer_name) - 1);
+        strncpy_s(g_computer_name, sizeof(g_computer_name), computer_name, _TRUNCATE);
         
         ListView_DeleteAllItems(g_printer_list_view);
         
@@ -324,7 +324,7 @@ void on_save_computer_name(void) {
     
     if (result == 0) {
         add_log(L"计算机名称已保存");
-        strncpy(g_computer_name, name, sizeof(g_computer_name) - 1);
+        strncpy_s(g_computer_name, sizeof(g_computer_name), name, _TRUNCATE);
     } else {
         add_log(L"保存计算机名称失败");
     }

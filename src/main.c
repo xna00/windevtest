@@ -36,6 +36,8 @@
 #include "http_client.h"   /* HTTP客户端 */
 #include "login_dlg.h"    /* 登录对话框 */
 #include "print_job.h"    /* 打印任务 */
+#include "print_core.h"   /* 核心打印功能 */
+#include "file_downloader.h" /* 文件下载 */
 #include "device_id.h"    /* 设备ID */
 #include "websocket.h"    /* WebSocket */
 #include "ui.h"           /* UI控件 */
@@ -156,7 +158,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
      * 返回值: 图标句柄
      */
     g_nid.hIcon = LoadIcon(NULL, IDI_APPLICATION);
-    wcscpy(g_nid.szTip, L"Print Driver");
+    wcscpy_s(g_nid.szTip, _countof(g_nid.szTip), L"Print Driver");
     /* Shell_NotifyIconW - 向系统托盘发送通知
      * 参数1: 操作类型，NIM_ADD表示添加图标
      * 参数2: 通知图标数据结构指针
@@ -412,7 +414,7 @@ void check_current_user(void) {
         if (root) {
             json_object *username_obj;
             if (json_object_object_get_ex(root, "username", &username_obj)) {
-                strncpy(g_username, json_object_get_string(username_obj), sizeof(g_username) - 1);
+                strncpy_s(g_username, sizeof(g_username), json_object_get_string(username_obj), _TRUNCATE);
                 
                 wchar_t welcome[256];
                 swprintf(welcome, 256, L"已登录: %S", g_username);  // %S 用于窄字符
@@ -469,7 +471,7 @@ void show_login_dialog(void) {
     LoginResult *result = get_login_result();
     if (result->success) {
         /* 登录成功 */
-        strncpy(g_username, result->username, sizeof(g_username) - 1);
+        strncpy_s(g_username, sizeof(g_username), result->username, _TRUNCATE);
         
         /* 保存cookie */
         http_client_save_cookie(g_http_client, COOKIE_FILE);
@@ -521,7 +523,7 @@ void register_computer(void) {
         wchar_t computer_name[256] = {0};
         DWORD size = sizeof(computer_name) / sizeof(wchar_t);
         if (!GetComputerNameW(computer_name, &size)) {
-            wcscpy(computer_name, L"Unknown");
+            wcscpy_s(computer_name, _countof(computer_name), L"Unknown");
         }
         
         wchar_t name_log[256];
@@ -584,7 +586,7 @@ void register_computer(void) {
  * - 使用libcurl的WebSocket支持
  * - 收到消息后调用on_websocket_message处理
  * - 支持掉线自动重连
- * - 支持心跳检测
+ * - libcurl会自动回复服务端的ping，客户端只需检查超时
  * 
  * 注意: 这是一个阻塞循环，会一直等待消息
  *       如果要支持UI响应，需要移到单独线程
@@ -622,25 +624,15 @@ void connect_websocket(void) {
         if (ws_connect(g_ws_client, API_WEBSOCKET_URL) == 0) {
             add_log(L"WebSocket已连接");
             ws_reset_reconnect_attempts(g_ws_client);
-            ws_update_heartbeat(g_ws_client);
+            ws_update_message_time(g_ws_client);
             
             /* 进入消息接收循环 */
             char buffer[4096];
-            DWORD last_ping_check = GetTickCount();
             
             while (ws_is_connected(g_ws_client)) {
-                /* 检查是否需要发送ping */
-                DWORD current_time = GetTickCount();
-                if (current_time - last_ping_check >= WS_PING_INTERVAL) {
-                    if (ws_send_ping(g_ws_client) == 0) {
-                        add_log(L"发送心跳ping");
-                    }
-                    last_ping_check = current_time;
-                }
-                
-                /* 检查心跳超时 */
-                if (ws_check_ping_timeout(g_ws_client)) {
-                    add_log(L"心跳超时，连接已断开");
+                /* 检查连接超时 */
+                if (ws_check_timeout(g_ws_client)) {
+                    add_log(L"连接超时，准备重连...");
                     ws_disconnect(g_ws_client);
                     break;
                 }
@@ -651,7 +643,6 @@ void connect_websocket(void) {
                 
                 if (ret == 0 && recv_bytes > 0) {
                     buffer[recv_bytes] = '\0';
-                    ws_update_heartbeat(g_ws_client);
                     on_websocket_message(buffer);
                 } else if (ret != 0) {
                     /* 接收失败，连接已断开 */
@@ -710,6 +701,9 @@ void on_websocket_message(const char *message) {
     if (strcmp(msg_type, "check_jobs") == 0) {
         add_log(L"收到打印任务检查消息");
         handle_print_job();
+    } else if (strcmp(msg_type, "heartbeat") == 0 || strcmp(msg_type, "ping") == 0) {
+        /* 心跳消息 */
+        add_log(L"收到心跳消息");
     } else {
         /* 其他类型的消息 */
         add_log(L"WebSocket收到消息:");

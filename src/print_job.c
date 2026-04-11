@@ -47,6 +47,10 @@ int get_waiting_print_jobs(HttpClient *client, const char *computer_id, PrintTas
     json_object *root = parse_json_response(response);
     if (!root) {
         add_log(L"解析JSON响应失败");
+        wchar_t wresponse[512];
+        MultiByteToWideChar(CP_UTF8, 0, response, -1, wresponse, 512);
+        swprintf_s(wresponse, 512, L"响应内容: %d", strlen(wresponse));
+        add_log(wresponse);
         free(response);
         return -1;
     }
@@ -130,18 +134,18 @@ int get_waiting_print_jobs(HttpClient *client, const char *computer_id, PrintTas
                     int task_id_int = json_object_get_int(task_id_obj);
                     snprintf((*tasks)[*count].job_id, sizeof((*tasks)[*count].job_id), "%s", job_id);
                     snprintf((*tasks)[*count].task_id, sizeof((*tasks)[*count].task_id), "%d", task_id_int);
-                    strncpy((*tasks)[*count].file_id, json_object_get_string(file_id_obj), sizeof((*tasks)[*count].file_id) - 1);
+                    strncpy_s((*tasks)[*count].file_id, sizeof((*tasks)[*count].file_id), json_object_get_string(file_id_obj), _TRUNCATE);
                     
                     /* 提取filename（如果有的话） */
                     if (json_object_object_get_ex(task, "filename", &filename_obj)) {
                         const char *fname = json_object_get_string(filename_obj);
                         if (fname) {
-                            strncpy((*tasks)[*count].filename, fname, sizeof((*tasks)[*count].filename) - 1);
+                            strncpy_s((*tasks)[*count].filename, sizeof((*tasks)[*count].filename), fname, _TRUNCATE);
                         } else {
-                            strncpy((*tasks)[*count].filename, json_object_get_string(file_id_obj), sizeof((*tasks)[*count].filename) - 1);
+                            strncpy_s((*tasks)[*count].filename, sizeof((*tasks)[*count].filename), json_object_get_string(file_id_obj), _TRUNCATE);
                         }
                     } else {
-                        strncpy((*tasks)[*count].filename, json_object_get_string(file_id_obj), sizeof((*tasks)[*count].filename) - 1);
+                        strncpy_s((*tasks)[*count].filename, sizeof((*tasks)[*count].filename), json_object_get_string(file_id_obj), _TRUNCATE);
                     }
                     
                     (*count)++;
