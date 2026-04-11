@@ -43,6 +43,8 @@ WebSocketClient* ws_init(const char *cookie, const char *computer_id) {
     ws->computer_id = computer_id;
     ws->on_message = NULL;
     ws->connected = 0;
+    ws->reconnect_attempts = 0;
+    ws->should_reconnect = 1;
     
     return ws;
 }
@@ -154,5 +156,37 @@ int ws_receive(WebSocketClient *ws, char *buffer, size_t buf_size, size_t *recv_
         return 0;
     }
     
+    /* 接收失败，标记为断开连接 */
+    ws->connected = 0;
     return -1;
+}
+
+/*
+ * 断开WebSocket连接
+ * 重置连接状态，准备重连
+ */
+void ws_disconnect(WebSocketClient *ws) {
+    if (ws) {
+        ws->connected = 0;
+        if (ws->curl) {
+            curl_easy_reset(ws->curl);
+        }
+    }
+}
+
+/*
+ * 检查连接状态
+ */
+int ws_is_connected(WebSocketClient *ws) {
+    return ws ? ws->connected : 0;
+}
+
+/*
+ * 重置重连计数器
+ * 连接成功后调用
+ */
+void ws_reset_reconnect_attempts(WebSocketClient *ws) {
+    if (ws) {
+        ws->reconnect_attempts = 0;
+    }
 }

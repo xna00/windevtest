@@ -580,9 +580,10 @@ void register_computer(void) {
 /*
  * connect_websocket
  * 
- * WebSocket连接成功后:
- * - 进入消息接收循环
+ * 连接到WebSocket服务器并接收消息
+ * - 使用libcurl的WebSocket支持
  * - 收到消息后调用on_websocket_message处理
+ * - 支持掉线自动重连
  * 
  * 注意: 这是一个阻塞循环，会一直等待消息
  *       如果要支持UI响应，需要移到单独线程
@@ -594,26 +595,62 @@ void connect_websocket(void) {
     const char *cookie = http_client_get_cookie(g_http_client);
     g_ws_client = ws_init(cookie, g_computer_id);
     
-    /* 连接WebSocket服务器 */
-    if (ws_connect(g_ws_client, API_WEBSOCKET_URL) == 0) {
-        add_log(L"WebSocket已连接");
-        
-        /* 进入消息接收循环 */
-        char buffer[4096];
-        while (1) {
-            size_t recv_bytes = 0;
-            int ret = ws_receive(g_ws_client, buffer, sizeof(buffer), &recv_bytes);
-            
-            if (ret == 0 && recv_bytes > 0) {
-                buffer[recv_bytes] = '\0';
-                on_websocket_message(buffer);
-            }
-            
-            Sleep(100);  /* 避免CPU占用过高 */
-        }
-    } else {
-        add_log(L"连接服务器失败");
+    if (!g_ws_client) {
+        add_log(L"初始化WebSocket客户端失败");
+        return;
     }
+    
+    /* 重连循环 */
+    while (g_ws_client->should_reconnect) {
+        /* 检查是否超过最大重连次数 */
+        if (g_ws_client->reconnect_attempts >= WS_MAX_RECONNECT_ATTEMPTS) {
+            add_log(L"已达到最大重连次数，停止重连");
+            break;
+        }
+        
+        /* 如果是重连，先等待一段时间 */
+        if (g_ws_client->reconnect_attempts > 0) {
+            wchar_t log[128];
+            swprintf(log, 128, L"第 %d 次重连，等待 %d 秒...", 
+                     g_ws_client->reconnect_attempts, WS_RECONNECT_DELAY / 1000);
+            add_log(log);
+            Sleep(WS_RECONNECT_DELAY);
+        }
+        
+        /* 连接WebSocket服务器 */
+        if (ws_connect(g_ws_client, API_WEBSOCKET_URL) == 0) {
+            add_log(L"WebSocket已连接");
+            ws_reset_reconnect_attempts(g_ws_client);
+            
+            /* 进入消息接收循环 */
+            char buffer[4096];
+            while (ws_is_connected(g_ws_client)) {
+                size_t recv_bytes = 0;
+                int ret = ws_receive(g_ws_client, buffer, sizeof(buffer), &recv_bytes);
+                
+                if (ret == 0 && recv_bytes > 0) {
+                    buffer[recv_bytes] = '\0';
+                    on_websocket_message(buffer);
+                } else if (ret != 0) {
+                    /* 接收失败，连接已断开 */
+                    add_log(L"WebSocket连接已断开，准备重连...");
+                    break;
+                }
+                
+                Sleep(100);  /* 避免CPU占用过高 */
+            }
+        } else {
+            g_ws_client->reconnect_attempts++;
+            wchar_t log[128];
+            swprintf(log, 128, L"连接服务器失败 (尝试 %d/%d)", 
+                     g_ws_client->reconnect_attempts, WS_MAX_RECONNECT_ATTEMPTS);
+            add_log(log);
+        }
+    }
+    
+    /* 清理WebSocket客户端 */
+    ws_cleanup(g_ws_client);
+    g_ws_client = NULL;
 }
 
 /* ==================== 处理WebSocket消息 ==================== */

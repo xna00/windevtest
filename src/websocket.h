@@ -12,6 +12,10 @@
 
 #include <curl/curl.h>
 
+/* ==================== 配置常量 ==================== */
+#define WS_RECONNECT_DELAY 5000      /* 重连延迟（毫秒） */
+#define WS_MAX_RECONNECT_ATTEMPTS 10 /* 最大重连尝试次数 */
+
 /* ==================== 类型定义 ==================== */
 /*
  * WebSocket消息回调函数类型
@@ -28,6 +32,8 @@ typedef struct {
     const char *computer_id;            /* 计算机ID */
     WebSocketMessageCallback on_message;  /* 消息回调函数 */
     int connected;                      /* 连接状态 */
+    int reconnect_attempts;             /* 当前重连尝试次数 */
+    int should_reconnect;               /* 是否应该重连 */
 } WebSocketClient;
 
 /* ==================== 函数声明 ==================== */
@@ -72,5 +78,22 @@ int ws_send(WebSocketClient *ws, const char *message);
  * @return 0成功，-1失败
  */
 int ws_receive(WebSocketClient *ws, char *buffer, size_t buf_size, size_t *recv_bytes);
+
+/*
+ * 断开WebSocket连接
+ * @param ws WebSocket客户端
+ */
+void ws_disconnect(WebSocketClient *ws);
+
+/*
+ * 检查连接状态
+ * @return 1已连接，0未连接
+ */
+int ws_is_connected(WebSocketClient *ws);
+
+/*
+ * 重置重连计数器
+ */
+void ws_reset_reconnect_attempts(WebSocketClient *ws);
 
 #endif
