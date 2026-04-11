@@ -592,7 +592,7 @@ void connect_websocket(void) {
     
     /* 初始化WebSocket客户端 */
     const char *cookie = http_client_get_cookie(g_http_client);
-    g_ws_client = ws_init(cookie);
+    g_ws_client = ws_init(cookie, g_computer_id);
     
     /* 连接WebSocket服务器 */
     if (ws_connect(g_ws_client, API_WEBSOCKET_URL) == 0) {

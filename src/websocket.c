@@ -34,12 +34,13 @@ static size_t ws_write_callback(void *contents, size_t size, size_t nmemb, void 
 /*
  * 初始化WebSocket客户端
  */
-WebSocketClient* ws_init(const char *cookie) {
+WebSocketClient* ws_init(const char *cookie, const char *computer_id) {
     WebSocketClient *ws = (WebSocketClient *)malloc(sizeof(WebSocketClient));
     if (!ws) return NULL;
     
     ws->curl = curl_easy_init();
     ws->cookie = cookie;
+    ws->computer_id = computer_id;
     ws->on_message = NULL;
     ws->connected = 0;
     
@@ -59,11 +60,14 @@ void ws_cleanup(WebSocketClient *ws) {
 /*
  * 连接到WebSocket服务器
  * 使用CURLOPT_CONNECT_ONLY模式建立WebSocket连接
+ * 在header中添加计算机ID
  */
 int ws_connect(WebSocketClient *ws, const char *url) {
     if (!ws || !ws->curl) return -1;
     
     char *response = NULL;
+    struct curl_slist *headers = NULL;
+    char computer_id_header[512];
     
     curl_easy_reset(ws->curl);
     curl_easy_setopt(ws->curl, CURLOPT_URL, url);
@@ -77,7 +81,27 @@ int ws_connect(WebSocketClient *ws, const char *url) {
         curl_easy_setopt(ws->curl, CURLOPT_COOKIE, ws->cookie);
     }
     
+    /* 添加计算机ID到header
+     * curl_slist_append - 添加字符串到链表
+     * 参数1: 链表头，NULL表示创建新链表
+     * 参数2: 要添加的字符串
+     * 返回值: 新的链表头指针
+     */
+    if (ws->computer_id) {
+        snprintf(computer_id_header, sizeof(computer_id_header), "X-Computer-ID: %s", ws->computer_id);
+        headers = curl_slist_append(headers, computer_id_header);
+        curl_easy_setopt(ws->curl, CURLOPT_HTTPHEADER, headers);
+    }
+    
     CURLcode res = curl_easy_perform(ws->curl);
+    
+    /* 释放header链表
+     * curl_slist_free_all - 释放整个链表
+     * 参数: 链表头指针
+     */
+    if (headers) {
+        curl_slist_free_all(headers);
+    }
     
     if (res == CURLE_OK) {
         long response_code;

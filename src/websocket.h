@@ -25,6 +25,7 @@ typedef void (*WebSocketMessageCallback)(const char *message);
 typedef struct {
     CURL *curl;                         /* libcurl句柄 */
     const char *cookie;                 /* 认证Cookie */
+    const char *computer_id;            /* 计算机ID */
     WebSocketMessageCallback on_message;  /* 消息回调函数 */
     int connected;                      /* 连接状态 */
 } WebSocketClient;
@@ -33,9 +34,10 @@ typedef struct {
 /*
  * 初始化WebSocket客户端
  * @param cookie 认证Cookie
+ * @param computer_id 计算机ID
  * @return WebSocketClient指针
  */
-WebSocketClient* ws_init(const char *cookie);
+WebSocketClient* ws_init(const char *cookie, const char *computer_id);
 
 /*
  * 清理WebSocket客户端
