@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.10)
 project(PrintDriver VERSION 1.0.0 LANGUAGES C)
 
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/version.h.in"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/version.h"
+)
+
 set(CMAKE_PREFIX_PATH 
     "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg_installed/vcpkg/pkgs/curl_x64-windows-static"
     "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg_installed/vcpkg/pkgs/zlib_x64-windows-static"
@@ -24,6 +29,7 @@ set(SOURCES
     src/file_downloader.c
     src/device_id.c
     src/ui.c
+    src/updater.c
 )
 
 set(HEADERS
@@ -38,6 +44,8 @@ set(HEADERS
     src/file_downloader.h
     src/device_id.h
     src/ui.h
+    src/updater.h
+    src/version.h
     src/resource.h
 )
 
