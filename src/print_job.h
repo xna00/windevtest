@@ -1,4 +1,4 @@
-﻿#ifndef PRINT_JOB_H
+#ifndef PRINT_JOB_H
 #define PRINT_JOB_H
 
 #include <windows.h>

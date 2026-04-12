@@ -1,4 +1,4 @@
-﻿/*
+/*
  * WebSocket客户端实现
  * 
  * 使用libcurl的WebSocket支持（CURLOPT_CONNECT_ONLY）
